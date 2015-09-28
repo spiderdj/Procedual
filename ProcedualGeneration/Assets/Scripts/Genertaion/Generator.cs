@@ -40,12 +40,15 @@ public class Generator : MonoBehaviour {
     private static float CorridorDistance = 30.0f;
 
     private static PathFinder pathFinder;
+    private static System.Func<int, Direction,int> getPathingValueFunc;
 
     public static List<Room> Generate(int LevelWidth, int LevelHeight, int MinRoomWidth, int MinRoomHeight, int MaxRoomWidth, int MaxRoomHeight, Object Tile, Object Wall)
     {
         //Make sure that the width and height of the tile array is the size of the level
         tilePlacements = new int[LevelWidth, LevelHeight];
         pathFinder = new PathFinder(tilePlacements);
+        pathFinder.pathDiagonal = false; //Stop diagonal path finding
+        getPathingValueFunc = CalculatePathingValue;
         rooms = new List<Room>();
 
         for (int y = 0; y < LevelHeight; y++)
@@ -131,7 +134,7 @@ public class Generator : MonoBehaviour {
     private static void JoinRooms(Room room, Room room1)
     {
         room.ConnectRoom(room1);
-        List<Point> path = pathFinder.findPath(new Point(room.x + room.width / 2, room.y + room.height / 2),new Point(room1.x + room1.width/2, room1.y + room1.height/2));
+        List<Point> path = pathFinder.findPath(new Point(room.x + room.width / 2, room.y + room.height / 2),new Point(room1.x + room1.width/2, room1.y + room1.height/2),getPathingValueFunc);
         foreach (var point in path)
         {
             tilePlacements[point.x, point.y] = 2;
@@ -150,6 +153,12 @@ public class Generator : MonoBehaviour {
 
 
         }
+    }
+
+    private static int CalculatePathingValue(int tileValue, Direction direction)
+    {
+        //We don't care about direction as we can't path diagonally
+        return (3 - tileValue);
     }
 
    
@@ -205,6 +214,7 @@ public class Generator : MonoBehaviour {
     private static void placeInLevel(Object Tile, Object Wall)
     {
         GameObject parent = new GameObject();
+        Globals.map = tilePlacements;
         parent.name = "Dungeon";
         for (int x = 0; x < tilePlacements.GetLength(0); x++)
         {

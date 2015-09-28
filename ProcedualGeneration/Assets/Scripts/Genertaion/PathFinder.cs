@@ -1,5 +1,6 @@
 ﻿using UnityEngine;
 using System.Collections.Generic;
+using System;
 
 
 class Node
@@ -31,14 +32,18 @@ public struct Point
     }
 }
 
+public enum Direction { Straight, Diagonal}
+
 public class PathFinder
 {
     Node[,] map;
     int[,] tiles;
 
-    List<Node>
- ClosedList = new List<Node>();
+    List<Node> ClosedList = new List<Node>();
     List<Node> OpenList = new List<Node>();
+
+    public bool pathDiagonal = true;
+
     public PathFinder(int[,] tiles)
     {
         this.tiles = tiles;
@@ -52,7 +57,14 @@ public class PathFinder
         }
     }
 
-    public List<Point> findPath(Point start,Point destination)
+    /// <summary>
+    /// Find a path from start to destination
+    /// </summary>
+    /// <param name="start">The co-ordinates of the start point in the grid</param>
+    /// <param name="destination">The co-ordinates of the end point in the grid</param>
+    /// <param name="GetPathingValue"> A function which should return the G value of the tile, should be negative if tile is not pathable</param>
+    /// <returns>List of co-ordinates which is the path from start to destination</returns>
+    public List<Point> findPath(Point start,Point destination, Func<int,Direction,int> GetPathingValue)
     {
 
         //Calculate H
@@ -61,6 +73,7 @@ public class PathFinder
             for (int y = 0; y < map.GetLength(1); y++)
             {
                 map[x, y].H = Mathf.Abs(destination.x - start.x) + Mathf.Abs(destination.y - start.y);
+                map[x, y].parent = null;
             }
         }
 
@@ -71,45 +84,48 @@ public class PathFinder
 
         OpenList.Add(map[start.x, start.y]);
 
+        if (start.x < 0 || start.x > map.GetLength(0) - 1 || start.y < 0 || start.y > map.GetLength(1) - 1)
+            return path;
+
+        if (GetPathingValue(tiles[destination.x, destination.y], Direction.Straight) < 0)
+            return path;
+
         while(OpenList.Count > 0 && !ClosedList.Contains(map[destination.x,destination.y]))
         {
             Node currentNode = getLowestF(OpenList);
             OpenList.Remove(currentNode);
             ClosedList.Add(currentNode);
-            
-            if(currentNode.x > 0)
-            {
-                Node leftNode = map[currentNode.x - 1, currentNode.y];
-                if(!ClosedList.Contains(leftNode))
-                    calculate(currentNode,leftNode);   
-            }
-            
-            if(currentNode.x < map.GetLength(0)-1)
-            {
-                Node rightNode = map[currentNode.x + 1, currentNode.y];
-                if (!ClosedList.Contains(rightNode))
-                    calculate(currentNode, rightNode);   
-            }
 
-            if(currentNode.y > 0)
+            for (int x = -1; x < 2; x++)
             {
-                Node upNode = map[currentNode.x, currentNode.y-1];
-                if(!ClosedList.Contains(upNode))
-                    calculate(currentNode, upNode);   
+                for (int y = -1; y < 2; y++)
+                {
+                    if (currentNode.x + x >= 0 && currentNode.x + x < tiles.GetLength(0) && currentNode.y + y >= 0 && currentNode.y+y < tiles.GetLength(1))
+                    {
+                            Node node = map[currentNode.x + x, currentNode.y + y];
+                            if (node != currentNode && !ClosedList.Contains(node))
+                            {
+                                if (x != 0 && y != 0)
+                                {
+                                    //If both x and y aren't 0 then we're on a diagonal
+                                    if (pathDiagonal)
+                                    {
+                                        calculate(currentNode, node, GetPathingValue, Direction.Diagonal);
+                                    }
+                                }
+                                else
+                                {
+                                    calculate(currentNode, node, GetPathingValue, Direction.Straight);
+                                }
+                            }
+                    }
+                }
             }
-
-            if(currentNode.y < map.GetLength(1)-1)
-            {
-                Node downNode = map[currentNode.x, currentNode.y+1];
-                if (!ClosedList.Contains(downNode))
-                    calculate(currentNode, downNode);   
-            }
-
         }
 
         Node cNode = map[destination.x, destination.y];
     
-        while(cNode != map[start.x,start.y])
+        while(cNode != map[start.x,start.y] && cNode != null)
         {
             path.Add(new Point(cNode.x, cNode.y));
             cNode = cNode.parent;
@@ -118,22 +134,26 @@ public class PathFinder
         return path;
     }
 
-    private void calculate(Node baseNode,Node node)
+    private void calculate(Node baseNode,Node node,Func<int,Direction,int> getPathingValue,Direction direction)
     {
-        if(OpenList.Contains(node))
+        int G = getPathingValue(tiles[node.x, node.y], direction);
+        if (G > 0)
         {
-            int newG = baseNode.G + (3 - tiles[node.x, node.y]);
-            if(newG < node.G)
+            if (OpenList.Contains(node))
             {
-                node.G = baseNode.G + (3 - tiles[node.x, node.y]);
-                node.parent = baseNode;
+                int newG = baseNode.G + G;
+                if (newG < node.G)
+                {
+                    node.G = baseNode.G + (3 - tiles[node.x, node.y]);
+                    node.parent = baseNode;
+                }
             }
-        }
-        else
-        {
-            node.G = baseNode.G + (3 - tiles[node.x, node.y]);
-            node.parent = baseNode;
-            OpenList.Add(node);
+            else
+            {
+                node.G = baseNode.G + G;
+                node.parent = baseNode;
+                OpenList.Add(node);
+            }
         }
     }
 
